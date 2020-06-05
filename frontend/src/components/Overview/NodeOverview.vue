@@ -2,19 +2,16 @@
   <el-row>
     <el-col :span="12">
       <!--last tasks-->
-      <el-row>
-        <task-table-view title="Latest Tasks"/>
-      </el-row>
-
-      <!--last deploys-->
-      <el-row v-if="false">
-        <deploy-table-view title="Latest Deploys"/>
+      <el-row class="latest-tasks-wrapper">
+        <task-table-view :title="$t('Latest Tasks')"/>
       </el-row>
     </el-col>
 
     <el-col :span="12">
-      <!--basic info-->
-      <node-info-view/>
+      <el-row class="node-info-view-wrapper">
+        <!--basic info-->
+        <node-info-view/>
+      </el-row>
     </el-col>
   </el-row>
 </template>
@@ -23,7 +20,6 @@
 import {
   mapState
 } from 'vuex'
-import DeployTableView from '../TableView/DeployTableView'
 import TaskTableView from '../TableView/TaskTableView'
 import NodeInfoView from '../InfoView/NodeInfoView'
 
@@ -31,7 +27,6 @@ export default {
   name: 'NodeOverview',
   components: {
     NodeInfoView,
-    DeployTableView,
     TaskTableView
   },
   computed: {

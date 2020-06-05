@@ -3,12 +3,7 @@
     <el-col :span="12">
       <!--last tasks-->
       <el-row>
-        <task-table-view title="Latest Tasks"/>
-      </el-row>
-
-      <!--last deploys-->
-      <el-row v-if="false">
-        <deploy-table-view title="Latest Deploys"/>
+        <task-table-view :title="$t('Latest Tasks')"/>
       </el-row>
     </el-col>
 
@@ -23,7 +18,6 @@
 import {
   mapState
 } from 'vuex'
-import DeployTableView from '../TableView/DeployTableView'
 import TaskTableView from '../TableView/TaskTableView'
 import SpiderInfoView from '../InfoView/SpiderInfoView'
 
@@ -31,7 +25,6 @@ export default {
   name: 'SpiderOverview',
   components: {
     SpiderInfoView,
-    DeployTableView,
     TaskTableView
   },
   data () {

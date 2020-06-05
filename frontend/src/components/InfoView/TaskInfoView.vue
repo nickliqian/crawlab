@@ -6,39 +6,73 @@
                ref="nodeForm"
                class="node-form"
                label-position="right">
-        <el-form-item label="Task ID">
+        <el-form-item :label="$t('Task ID')">
           <el-input v-model="taskForm._id" placeholder="Task ID" disabled></el-input>
         </el-form-item>
-        <el-form-item label="Status">
-          <el-tag type="success" v-if="taskForm.status === 'SUCCESS'">SUCCESS</el-tag>
-          <el-tag type="warning" v-else-if="taskForm.status === 'PENDING'">PENDING</el-tag>
-          <el-tag type="danger" v-else-if="taskForm.status === 'FAILURE'">FAILURE</el-tag>
-          <el-tag type="info" v-else>{{taskForm.status}}</el-tag>
+        <el-form-item :label="$t('Status')">
+          <status-tag :status="taskForm.status"/>
+          <el-badge
+            v-if="taskForm.error_log_count > 0"
+            :value="taskForm.error_log_count"
+            style="margin-left:10px; cursor:pointer;"
+          >
+            <el-tag type="danger" @click="onClickLogWithErrors">
+              <i class="el-icon-warning"></i>
+              {{$t('Log with errors')}}
+            </el-tag>
+          </el-badge>
+          <el-tag
+            v-if="taskForm.status === 'finished' && taskForm.result_count === 0"
+            type="danger"
+            style="margin-left: 10px"
+          >
+            <i class="el-icon-warning"></i>
+            {{$t('Empty results')}}
+          </el-tag>
         </el-form-item>
-        <el-form-item label="Spider Version">
-          <el-input v-model="taskForm.spider_version" placeholder="Log File Path" disabled></el-input>
+        <el-form-item :label="$t('Log File Path')">
+          <el-input v-model="taskForm.log_path" placeholder="Log File Path" disabled></el-input>
         </el-form-item>
-        <el-form-item label="Log File Path">
-          <el-input v-model="taskForm.log_file_path" placeholder="Log File Path" disabled></el-input>
+        <el-form-item :label="$t('Parameters')">
+          <el-input v-model="taskForm.param" placeholder="Parameters" disabled></el-input>
         </el-form-item>
-        <el-form-item label="Create Timestamp">
-          <el-input v-model="taskForm.create_ts" placeholder="Create Timestamp" disabled></el-input>
+        <el-form-item :label="$t('Create Time')">
+          <el-input :value="getTime(taskForm.create_ts)" placeholder="Create Time" disabled></el-input>
         </el-form-item>
-        <el-form-item label="Finish Timestamp">
-          <el-input v-model="taskForm.finish_ts" placeholder="Finish Timestamp" disabled></el-input>
+        <el-form-item :label="$t('Start Time')">
+          <el-input :value="getTime(taskForm.start_ts)" placeholder="Start Time" disabled></el-input>
         </el-form-item>
-        <el-form-item label="Duration (sec)">
-          <el-input v-model="taskForm.duration" placeholder="Duration" disabled></el-input>
+        <el-form-item :label="$t('Finish Time')">
+          <el-input :value="getTime(taskForm.finish_ts)" placeholder="Finish Time" disabled></el-input>
         </el-form-item>
-        <el-form-item label="Error Message" v-if="taskForm.status === 'FAILURE'">
+        <el-form-item :label="$t('Wait Duration (sec)')">
+          <el-input :value="getWaitDuration(taskForm)" placeholder="Wait Duration" disabled></el-input>
+        </el-form-item>
+        <el-form-item :label="$t('Runtime Duration (sec)')">
+          <el-input :value="getRuntimeDuration(taskForm)" placeholder="Runtime Duration" disabled></el-input>
+        </el-form-item>
+        <el-form-item :label="$t('Total Duration (sec)')">
+          <el-input :value="getTotalDuration(taskForm)" placeholder="Runtime Duration" disabled></el-input>
+        </el-form-item>
+        <el-form-item :label="$t('Results Count')">
+          <el-input v-model="taskForm.result_count" placeholder="Results Count" disabled></el-input>
+        </el-form-item>
+        <!--<el-form-item :label="$t('Average Results Count per Second')">-->
+        <!--<el-input v-model="taskForm.avg_num_results" placeholder="Average Results Count per Second" disabled>-->
+        <!--</el-input>-->
+        <!--</el-form-item>-->
+        <el-form-item :label="$t('Error Message')" v-if="taskForm.status === 'error'">
           <div class="error-message">
-            {{taskForm.result}}
+            {{ taskForm.error }}
           </div>
         </el-form-item>
       </el-form>
     </el-row>
     <el-row class="button-container">
-      <el-button type="danger" @click="onRestart">Restart</el-button>
+      <el-button v-if="isRunning" size="small" type="danger" @click="onStop" icon="el-icon-video-pause">
+        {{$t('Stop')}}
+      </el-button>
+      <!--<el-button type="danger" @click="onRestart">Restart</el-button>-->
     </el-row>
   </div>
 </template>
@@ -47,16 +81,50 @@
 import {
   mapState
 } from 'vuex'
+import StatusTag from '../Status/StatusTag'
+import dayjs from 'dayjs'
 
 export default {
   name: 'NodeInfoView',
+  components: { StatusTag },
   computed: {
     ...mapState('task', [
-      'taskForm'
-    ])
+      'taskForm',
+      'taskLog',
+      'errorLogData'
+    ]),
+    isRunning () {
+      return ['pending', 'running'].includes(this.taskForm.status)
+    }
   },
   methods: {
-    Restart () {
+    onRestart () {
+    },
+    onStop () {
+      this.$store.dispatch('task/cancelTask', this.$route.params.id)
+        .then(() => {
+          this.$message.success(`Task "${this.$route.params.id}" has been sent signal to stop`)
+        })
+    },
+    getTime (str) {
+      if (!str || str.match('^0001')) return 'NA'
+      return dayjs(str).format('YYYY-MM-DD HH:mm:ss')
+    },
+    getWaitDuration (row) {
+      if (!row.start_ts || row.start_ts.match('^0001')) return 'NA'
+      return dayjs(row.start_ts).diff(row.create_ts, 'second')
+    },
+    getRuntimeDuration (row) {
+      if (!row.finish_ts || row.finish_ts.match('^0001')) return 'NA'
+      return dayjs(row.finish_ts).diff(row.start_ts, 'second')
+    },
+    getTotalDuration (row) {
+      if (!row.finish_ts || row.finish_ts.match('^0001')) return 'NA'
+      return dayjs(row.finish_ts).diff(row.create_ts, 'second')
+    },
+    onClickLogWithErrors () {
+      this.$emit('click-log')
+      this.$st.sendEv('任务详情', '概览', '点击日志错误')
     }
   }
 }
@@ -85,5 +153,9 @@ export default {
     border-radius: 4px;
     line-height: 18px;
     padding: 5px 10px;
+  }
+
+  .el-form-item {
+    text-align: left;
   }
 </style>

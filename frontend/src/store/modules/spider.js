@@ -1,12 +1,23 @@
-import dayjs from 'dayjs'
+import Vue from 'vue'
 import request from '../../api/request'
 
 const state = {
   // list of spiders
   spiderList: [],
 
+  spiderTotal: 0,
+
   // active spider data
-  spiderForm: { _id: {} },
+  spiderForm: {},
+
+  // spider scrapy settings
+  spiderScrapySettings: [],
+
+  // spider scrapy items
+  spiderScrapyItems: [],
+
+  // spider scrapy pipelines
+  spiderScrapyPipelines: [],
 
   // node to deploy/run
   activeNode: {},
@@ -15,12 +26,42 @@ const state = {
   importForm: {
     url: '',
     type: 'github'
-  }
+  },
+
+  // spider overview stats
+  overviewStats: {},
+
+  // spider status stats
+  statusStats: [],
+
+  // spider daily stats
+  dailyStats: [],
+
+  // spider node stats
+  nodeStats: [],
+
+  // filters
+  filterSite: '',
+
+  // preview crawl data
+  previewCrawlData: [],
+
+  // template list
+  templateList: [],
+
+  // spider file tree
+  fileTree: {},
+
+  // config list ts
+  configListTs: undefined
 }
 
 const getters = {}
 
 const mutations = {
+  SET_SPIDER_TOTAL (state, value) {
+    state.spiderTotal = value
+  },
   SET_SPIDER_FORM (state, value) {
     state.spiderForm = value
   },
@@ -32,100 +73,233 @@ const mutations = {
   },
   SET_IMPORT_FORM (state, value) {
     state.importForm = value
+  },
+  SET_OVERVIEW_STATS (state, value) {
+    state.overviewStats = value
+  },
+  SET_STATUS_STATS (state, value) {
+    state.statusStats = value
+  },
+  SET_DAILY_STATS (state, value) {
+    state.dailyStats = value
+  },
+  SET_NODE_STATS (state, value) {
+    state.nodeStats = value
+  },
+  SET_FILTER_SITE (state, value) {
+    state.filterSite = value
+  },
+  SET_PREVIEW_CRAWL_DATA (state, value) {
+    state.previewCrawlData = value
+  },
+  SET_SPIDER_FORM_CONFIG_SETTINGS (state, payload) {
+    const settings = {}
+    payload.forEach(row => {
+      settings[row.name] = row.value
+    })
+    Vue.set(state.spiderForm.config, 'settings', settings)
+  },
+  SET_TEMPLATE_LIST (state, value) {
+    state.templateList = value
+  },
+  SET_FILE_TREE (state, value) {
+    state.fileTree = value
+  },
+  SET_SPIDER_SCRAPY_SETTINGS (state, value) {
+    state.spiderScrapySettings = value
+  },
+  SET_SPIDER_SCRAPY_ITEMS (state, value) {
+    state.spiderScrapyItems = value
+  },
+  SET_SPIDER_SCRAPY_PIPELINES (state, value) {
+    state.spiderScrapyPipelines = value
+  },
+  SET_CONFIG_LIST_TS (state, value) {
+    state.configListTs = value
   }
 }
 
 const actions = {
-  getSpiderList ({ state, commit }) {
-    return request.get('/spiders', {})
+  getSpiderList ({ state, commit }, params = {}) {
+    return request.get('/spiders', params)
       .then(response => {
-        commit('SET_SPIDER_LIST', response.data.items)
-      })
-  },
-  addSpider ({ state, dispatch }) {
-    return request.put('/spiders', {
-      name: state.spiderForm.name,
-      src: state.spiderForm.src,
-      cmd: state.spiderForm.cmd,
-      type: state.spiderForm.type,
-      lang: state.spiderForm.lang
-    })
-      .then(() => {
-        dispatch('getSpiderList')
+        commit('SET_SPIDER_LIST', response.data.data.list)
+        commit('SET_SPIDER_TOTAL', response.data.data.total)
       })
   },
   editSpider ({ state, dispatch }) {
-    return request.post(`/spiders/${state.spiderForm._id.$oid}`, {
-      name: state.spiderForm.name,
-      src: state.spiderForm.src,
-      cmd: state.spiderForm.cmd,
-      type: state.spiderForm.type,
-      lang: state.spiderForm.lang,
-      col: state.spiderForm.col
-    })
-      .then(() => {
-        dispatch('getSpiderList')
-      })
+    return request.post(`/spiders/${state.spiderForm._id}`, state.spiderForm)
   },
   deleteSpider ({ state, dispatch }, id) {
     return request.delete(`/spiders/${id}`)
-      .then(() => {
-        dispatch('getSpiderList')
-      })
   },
   getSpiderData ({ state, commit }, id) {
     return request.get(`/spiders/${id}`)
       .then(response => {
-        commit('SET_SPIDER_FORM', response.data)
+        let data = response.data.data
+        commit('SET_SPIDER_FORM', data)
       })
   },
-  deploySpider ({ state, dispatch }, id) {
-    return request.post(`/spiders/${id}/deploy`)
-      .then(response => {
-        console.log(response.data)
-      })
+  async getSpiderScrapySpiders ({ state, commit }, id) {
+    const res = await request.get(`/spiders/${id}/scrapy/spiders`)
+    state.spiderForm.spider_names = res.data.data
+    commit('SET_SPIDER_FORM', state.spiderForm)
   },
-  crawlSpider ({ state, dispatch }, id) {
-    return request.post(`/spiders/${id}/on_crawl`)
-      .then(response => {
-        console.log(response.data)
-      })
+  async getSpiderScrapySettings ({ state, commit }, id) {
+    const res = await request.get(`/spiders/${id}/scrapy/settings`)
+    commit('SET_SPIDER_SCRAPY_SETTINGS', res.data.data.map(d => {
+      const key = d.key
+      const value = d.value
+      let type = typeof value
+      if (type === 'object') {
+        if (Array.isArray(value)) {
+          type = 'array'
+        } else {
+          type = 'object'
+        }
+      }
+      return {
+        key,
+        value,
+        type
+      }
+    }))
   },
-  getDeployList ({ state, commit }, id) {
-    return request.get(`/spiders/${id}/get_deploys`)
-      .then(response => {
-        commit('deploy/SET_DEPLOY_LIST',
-          response.data.items.map(d => {
-            if (d.finish_ts) d.finish_ts = dayjs(d.finish_ts.$date).format('YYYY-MM-DD HH:mm:ss')
-            return d
-          }).sort((a, b) => a.finish_ts < b.finish_ts ? 1 : -1),
-          { root: true })
+  async saveSpiderScrapySettings ({ state }, id) {
+    return request.post(`/spiders/${id}/scrapy/settings`, state.spiderScrapySettings)
+  },
+  async getSpiderScrapyItems ({ state, commit }, id) {
+    const res = await request.get(`/spiders/${id}/scrapy/items`)
+    let nodeId = 0
+    commit('SET_SPIDER_SCRAPY_ITEMS', res.data.data.map(d => {
+      d.id = nodeId++
+      d.label = d.name
+      d.level = 1
+      d.isEdit = false
+      d.children = d.fields.map(f => {
+        return {
+          id: nodeId++,
+          label: f,
+          level: 2,
+          isEdit: false
+        }
       })
+      return d
+    }))
+  },
+  async saveSpiderScrapyItems ({ state }, id) {
+    return request.post(`/spiders/${id}/scrapy/items`, state.spiderScrapyItems.map(d => {
+      d.name = d.label
+      d.fields = d.children.map(f => f.label)
+      return d
+    }))
+  },
+  async getSpiderScrapyPipelines ({ state, commit }, id) {
+    const res = await request.get(`/spiders/${id}/scrapy/pipelines`)
+    commit('SET_SPIDER_SCRAPY_PIPELINES', res.data.data)
+  },
+  async saveSpiderScrapyPipelines ({ state }, id) {
+    return request.post(`/spiders/${id}/scrapy/pipelines`, state.spiderScrapyPipelines)
+  },
+  async getSpiderScrapySpiderFilepath ({ state, commit }, payload) {
+    const { id, spiderName } = payload
+    return request.get(`/spiders/${id}/scrapy/spider/filepath`, { spider_name: spiderName })
+  },
+  addSpiderScrapySpider ({ state }, payload) {
+    const { id, form } = payload
+    return request.put(`/spiders/${id}/scrapy/spiders`, form)
+  },
+  crawlSpider ({ state, dispatch }, payload) {
+    const { spiderId, runType, nodeIds, param } = payload
+    return request.put(`/tasks`, {
+      spider_id: spiderId,
+      run_type: runType,
+      node_ids: nodeIds,
+      param: param
+    })
+  },
+  crawlSelectedSpiders ({ state, dispatch }, payload) {
+    const { taskParams, runType, nodeIds } = payload
+    return request.post(`/spiders-run`, {
+      task_params: taskParams,
+      run_type: runType,
+      node_ids: nodeIds
+    })
   },
   getTaskList ({ state, commit }, id) {
-    return request.get(`/spiders/${id}/get_tasks`)
+    return request.get(`/spiders/${id}/tasks`)
       .then(response => {
         commit('task/SET_TASK_LIST',
-          response.data.items.map(d => {
-            if (d.create_ts) d.create_ts = dayjs(d.create_ts.$date).format('YYYY-MM-DD HH:mm:ss')
-            if (d.finish_ts) d.finish_ts = dayjs(d.finish_ts.$date).format('YYYY-MM-DD HH:mm:ss')
+          response.data.data ? response.data.data.map(d => {
             return d
-          }).sort((a, b) => a.create_ts < b.create_ts ? 1 : -1),
+          }).sort((a, b) => a.create_ts < b.create_ts ? 1 : -1) : [],
           { root: true })
+      })
+  },
+  getDir ({ state, commit }, path) {
+    const id = state.spiderForm._id
+    return request.get(`/spiders/${id}/dir`)
+      .then(response => {
+        commit('')
       })
   },
   importGithub ({ state }) {
     const url = state.importForm.url
     return request.post('/spiders/import/github', { url })
+  },
+  getSpiderStats ({ state, commit }) {
+    return request.get(`/spiders/${state.spiderForm._id}/stats`)
       .then(response => {
-        console.log(response)
+        commit('SET_OVERVIEW_STATS', response.data.data.overview)
+        // commit('SET_STATUS_STATS', response.data.task_count_by_status)
+        commit('SET_DAILY_STATS', response.data.data.daily)
+        // commit('SET_NODE_STATS', response.data.task_count_by_node)
       })
   },
-  deployAll () {
-    return request.post('/spiders/manage/deploy_all')
+  getPreviewCrawlData ({ state, commit }) {
+    return request.post(`/spiders/${state.spiderForm._id}/preview_crawl`)
       .then(response => {
-        console.log(response)
+        commit('SET_PREVIEW_CRAWL_DATA', response.data.items)
       })
+  },
+  extractFields ({ state, commit }) {
+    return request.post(`/spiders/${state.spiderForm._id}/extract_fields`)
+  },
+  postConfigSpiderConfig ({ state }) {
+    return request.post(`/config_spiders/${state.spiderForm._id}/config`, state.spiderForm.config)
+  },
+  saveConfigSpiderSpiderfile ({ state, rootState }) {
+    const content = rootState.file.fileContent
+    return request.post(`/config_spiders/${state.spiderForm._id}/spiderfile`, { content })
+  },
+  addConfigSpider ({ state }) {
+    return request.put(`/config_spiders`, state.spiderForm)
+  },
+  addSpider ({ state }) {
+    return request.put(`/spiders`, state.spiderForm)
+  },
+  async getTemplateList ({ state, commit }) {
+    const res = await request.get(`/config_spiders_templates`)
+    commit('SET_TEMPLATE_LIST', res.data.data)
+  },
+  async getScheduleList ({ state, commit }, payload) {
+    const { id } = payload
+    const res = await request.get(`/spiders/${id}/schedules`)
+    let data = res.data.data
+    if (data) {
+      data = data.map(d => {
+        const arr = d.cron.split(' ')
+        arr.splice(0, 1)
+        d.cron = arr.join(' ')
+        return d
+      })
+    }
+    commit('schedule/SET_SCHEDULE_LIST', data, { root: true })
+  },
+  async getFileTree ({ state, commit }, payload) {
+    const id = payload ? payload.id : state.spiderForm._id
+    const res = await request.get(`/spiders/${id}/file/tree`)
+    commit('SET_FILE_TREE', res.data.data)
   }
 }
 
